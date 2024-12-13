@@ -1,0 +1,198 @@
+import pygame
+import random
+
+# Инициализация Pygame
+pygame.init()
+
+# Настройки окна
+WIDTH, HEIGHT = 800, 600
+win = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Game for zachet on inf")
+
+# Цвета
+WHITE = (255, 255, 255)
+BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+
+# Шрифт
+font = pygame.font.SysFont("Arial", 20)
+
+# Персонаж
+class Player:
+    def __init__(self):
+        self.x = 50
+        self.y = HEIGHT - 70
+        self.width = 50
+        self.height = 60
+        self.base_vel = 5  # Базовая скорость
+        self.vel = self.base_vel  # Текущая скорость
+        self.isJumping = False
+        self.jumpCount = 10
+        self.inventory = {}  # Используем словарь для инвентаря
+        self.showInventory = False  # Флаг для показа инвентаря
+        self.color = BLUE  # Начальный цвет персонажа
+        self.can_move = True  # Флаг для отслеживания возможности движения
+        self.movement_restriction_time = 0  # Время ограничения движения
+
+    def draw(self, win):
+        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height))
+
+    def jump(self):
+        if self.jumpCount >= -10:
+            neg = 1
+            if self.jumpCount < 0:
+                neg = -1
+            self.y -= (self.jumpCount ** 2) * 0.5 * neg
+            self.jumpCount -= 1
+        else:
+            self.isJumping = False
+            self.jumpCount = 10
+
+    def toggle_inventory(self):
+        self.showInventory = not self.showInventory
+
+    def draw_inventory(self, win):
+        if self.showInventory:
+            inv_width = 200
+            inv_height = 150
+            inv_x = self.x
+            inv_y = self.y - inv_height - 10
+
+            pygame.draw.rect(win, WHITE, (inv_x, inv_y, inv_width, inv_height), 0)
+            pygame.draw.rect(win, BLACK, (inv_x, inv_y, inv_width, inv_height), 2)
+
+            items_text = ", ".join(f"{color}: {count}" for color, count in self.inventory.items())
+            label = font.render(f"Инвентарь: {items_text if items_text else 'Пусто'}", True, BLACK)
+            win.blit(label, (inv_x + 10, inv_y + 10))
+
+# Предмет
+class Item:
+    def __init__(self, x, color):
+        self.x = x
+        self.y = 0  # Начальная позиция - сверху
+        self.width = 30
+        self.height = 30
+        self.color = color  # Добавляем цвет предмета
+        self.fall_speed = 5  # Скорость падения предмета
+
+    def move(self):
+        self.y += self.fall_speed  # Двигаем предмет вниз
+
+    def draw(self, win):
+        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height))
+
+# Основная игра
+def main():
+    run = True
+    clock = pygame.time.Clock()
+    player = Player()
+    items = []
+    game_over = False  # Флаг для отслеживания состояния игры
+
+    # Создание предметов
+    colors = [RED, GREEN, BLUE, (255, 255, 0), (255, 165, 0), BLACK]
+
+    # Таймер для создания предметов
+    last_item_time = pygame.time.get_ticks()
+    item_spawn_interval = 500  # 0,5 секунды
+
+    while run:
+        clock.tick(30)
+        win.fill(WHITE)
+
+        if game_over:
+            # Отображаем сообщение о проигрыше
+            game_over_label = font.render("Вы проиграли! Нажмите ALT+F4 для выхода.", True, BLACK)
+            win.blit(game_over_label, (WIDTH // 2 - game_over_label.get_width() // 2, HEIGHT // 2 - game_over_label.get_height() // 2))
+        else:
+            player.draw(win)
+
+            # Проверка, прошло ли 0,5 секунды с последнего создания предмета
+            current_time = pygame.time.get_ticks()
+            if current_time - last_item_time > item_spawn_interval:
+                item_color = random.choice(colors)
+                item_x = random.randint(0, WIDTH - 30)  # Случайная позиция по горизонтали
+                items.append(Item(item_x, item_color))
+                last_item_time = current_time  # Обновляем время последнего создания предмета
+
+            # Двигаем и отрисовываем предметы
+            for item in items:
+                item.move()  # Двигаем предмет
+                item.draw(win)  # Отрисовываем предмет
+
+            # Проверка на столкновение с предметами
+            for item in items[:]:
+                if (player.x < item.x + item.width and
+                    player.x + player.width > item.x and
+                    player.y < item.y + item.height and
+                    player.y + player.height > item.y):
+
+                    # Меняем цвет игрока на цвет предмета
+                    player.color = item.color
+
+                    # Если предмет черного цвета, персонаж умирает
+                    if item.color == BLACK:
+                        game_over = True  # Устанавливаем флаг о проигрыше
+
+                    # Если предмет красного цвета, ускоряем персонажа
+                    elif item.color == RED:
+                        player.vel += 2  # Увеличиваем скорость на 2
+
+                    # Если предмет синего цвета, увеличиваем прыжок
+                    elif item.color == BLUE:
+                        player.jumpCount += 1  # Увеличиваем высоту прыжка
+
+                    elif item.color == (255, 255, 0):
+                        player.vel -= 2  # Уменьшаем скорость на 2
+
+                    # Если предмет зеленого цвета, блокируем движение на 3 секунды
+                    elif item.color == GREEN:
+                        player.can_move = False
+                        player.movement_restriction_time = current_time + 3000  # Устанавливаем время окончания блокировки
+
+                    # Обновляем инвентарь
+                    color = item.color
+                    if color in player.inventory:
+                        player.inventory[color] += 1
+                    else:
+                        player.inventory[color] = 1
+                    items.remove(item)  # Убираем предмет из списка
+
+            # Проверка возможности движения
+            if player.movement_restriction_time > 0 and current_time >= player.movement_restriction_time:
+                player.can_move = True
+                player.movement_restriction_time = 0  # Сбрасываем время ограничения
+
+            # Управление движением
+            keys = pygame.key.get_pressed()
+            if player.can_move:  # Проверяем, может ли игрок двигаться
+                if keys[pygame.K_LEFT] and player.x > 0:
+                    player.x -= player.vel
+                if keys[pygame.K_RIGHT] and player.x < WIDTH - player.width:
+                    player.x += player.vel
+                if not player.isJumping:
+                    if keys[pygame.K_SPACE]:  # Прыжок
+                        player.isJumping = True
+                else:
+                    player.jump()
+
+            player.draw_inventory(win)  # Отрисовываем инвентарь
+
+            # Открытие/закрытие рюкзака
+            if keys[pygame.K_i]:  # Кнопка "I"
+                player.toggle_inventory()
+
+        # Проверка нажатия клавиши ESC
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+
+
+        pygame.display.update()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
